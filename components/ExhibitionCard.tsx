@@ -3,7 +3,7 @@
  * 진행중인 전시 정보를 표시하는 미니멀한 카드
  */
 
-import React from "react";
+import React, { useMemo } from "react";
 import {
   TouchableOpacity,
   StyleSheet,
@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { colors } from "../theme/colors";
 import type { Exhibition } from "../data/exhibitions";
+import { useResponsive } from "../hooks/useResponsive";
 
 interface ExhibitionCardProps {
   exhibition: Exhibition;
@@ -30,6 +31,9 @@ export const ExhibitionCard: React.FC<ExhibitionCardProps> = ({
   onPress,
   style,
 }) => {
+  const { scale, moderateScale } = useResponsive();
+  const styles = useMemo(() => createStyles(scale, moderateScale), [scale, moderateScale]);
+
   return (
     <TouchableOpacity
       style={[styles.card, style]}
@@ -64,68 +68,69 @@ export const ExhibitionCard: React.FC<ExhibitionCardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.background.card,
-    borderRadius: 8,
-    padding: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.03)",
-    ...(Platform.OS === "web" && {
-      transition: "all 0.3s ease",
-      cursor: "pointer",
-    } as any),
-  } as ViewStyle,
-  content: {
-    flex: 1,
-    marginRight: 16,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: "300",
-    color: colors.text.primary,
-    flex: 1,
-    marginRight: 12,
-    letterSpacing: 0.3,
-  } as TextStyle,
-  location: {
-    fontSize: 12,
-    fontWeight: "300",
-    color: colors.text.muted,
-    letterSpacing: 0.2,
-  } as TextStyle,
-  subtitle: {
-    fontSize: 11,
-    fontWeight: "300",
-    color: colors.text.muted,
-    marginBottom: 10,
-    letterSpacing: 0.2,
-  } as TextStyle,
-  description: {
-    fontSize: 13,
-    fontWeight: "300",
-    color: colors.text.secondary,
-    lineHeight: 18,
-    letterSpacing: 0.2,
-  } as TextStyle,
-  arrow: {
-    width: 32,
-    height: 32,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  arrowText: {
-    fontSize: 18,
-    color: colors.text.muted,
-    fontWeight: "200",
-  } as TextStyle,
-});
+const createStyles = (scale: (size: number) => number, moderateScale: (size: number, factor?: number) => number) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.background.card,
+      borderRadius: scale(8),
+      padding: scale(20),
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.03)",
+      ...(Platform.OS === "web" && {
+        transition: "all 0.3s ease",
+        cursor: "pointer",
+      } as any),
+    } as ViewStyle,
+    content: {
+      flex: 1,
+      marginRight: scale(16),
+    },
+    header: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "flex-start" as const,
+      marginBottom: scale(8),
+    },
+    title: {
+      fontSize: moderateScale(17),
+      fontWeight: "300" as const,
+      color: colors.text.primary,
+      flex: 1,
+      marginRight: scale(12),
+      letterSpacing: 0.3,
+    } as TextStyle,
+    location: {
+      fontSize: moderateScale(12),
+      fontWeight: "300" as const,
+      color: colors.text.muted,
+      letterSpacing: 0.2,
+    } as TextStyle,
+    subtitle: {
+      fontSize: moderateScale(11),
+      fontWeight: "300" as const,
+      color: colors.text.muted,
+      marginBottom: scale(10),
+      letterSpacing: 0.2,
+    } as TextStyle,
+    description: {
+      fontSize: moderateScale(13),
+      fontWeight: "300" as const,
+      color: colors.text.secondary,
+      lineHeight: moderateScale(18),
+      letterSpacing: 0.2,
+    } as TextStyle,
+    arrow: {
+      width: scale(32),
+      height: scale(32),
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    arrowText: {
+      fontSize: moderateScale(18),
+      color: colors.text.muted,
+      fontWeight: "200" as const,
+    } as TextStyle,
+  });
 

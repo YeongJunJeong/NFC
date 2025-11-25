@@ -3,7 +3,7 @@
  * 진행중인 전시 목록을 표시하는 미니멀한 홈 화면
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, Animated, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -11,12 +11,17 @@ import { StatusBar } from "expo-status-bar";
 import { ExhibitionCard } from "../components/ExhibitionCard";
 import { colors } from "../theme/colors";
 import { exhibitions } from "../data/exhibitions";
+import { useResponsive } from "../hooks/useResponsive";
 
 /**
  * 메인 페이지 컴포넌트
  */
 export default function HomeScreen() {
   const router = useRouter();
+  const { scale, moderateScale } = useResponsive();
+
+  // 반응형 스타일
+  const styles = useMemo(() => createStyles(scale, moderateScale), [scale, moderateScale]);
 
   // fade-in 애니메이션
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -109,28 +114,29 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background.primary,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: 40,
-  },
-  headerSection: {
-    marginBottom: 40,
-    paddingHorizontal: 4,
-  },
-  logo: {
-    fontSize: 28,
-    fontWeight: "200",
-    color: colors.text.primary,
-    letterSpacing: 4,
-  },
-  exhibitionList: {
-    gap: 16,
-  },
-});
+const createStyles = (scale: (size: number) => number, moderateScale: (size: number, factor?: number) => number) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background.primary,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      paddingHorizontal: scale(20),
+      paddingTop: scale(40),
+      paddingBottom: scale(40),
+    },
+    headerSection: {
+      marginBottom: scale(40),
+      paddingHorizontal: scale(4),
+    },
+    logo: {
+      fontSize: moderateScale(28),
+      fontWeight: "200" as const,
+      color: colors.text.primary,
+      letterSpacing: 4,
+    },
+    exhibitionList: {
+      gap: scale(16),
+    },
+  });
