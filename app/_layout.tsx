@@ -20,6 +20,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="exhibition/[id]" />
+        <Stack.Screen name="exhibition/[id]/audio/[artworkId]" />
       </Stack>
     </>
   );

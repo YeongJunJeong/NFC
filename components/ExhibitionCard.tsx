@@ -14,15 +14,7 @@ import {
   Platform,
 } from "react-native";
 import { colors } from "../theme/colors";
-import { typography } from "../theme/typography";
-
-interface Exhibition {
-  id: string;
-  title: string;
-  subtitle: string;
-  location: string;
-  description: string;
-}
+import type { Exhibition } from "../data/exhibitions";
 
 interface ExhibitionCardProps {
   exhibition: Exhibition;

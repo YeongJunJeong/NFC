@@ -10,35 +10,7 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ExhibitionCard } from "../components/ExhibitionCard";
 import { colors } from "../theme/colors";
-import { typography } from "../theme/typography";
-
-/**
- * 진행중인 전시 데이터 (임시)
- * TODO: 실제 API에서 데이터를 가져오도록 수정
- */
-const ongoingExhibitions = [
-  {
-    id: "1",
-    title: "현대 미술의 흐름",
-    subtitle: "2024.01.15 - 2024.03.31",
-    location: "국립현대미술관",
-    description: "20세기부터 현재까지의 현대 미술 작품들을 한눈에",
-  },
-  {
-    id: "2",
-    title: "인상주의의 빛",
-    subtitle: "2024.02.01 - 2024.04.30",
-    location: "서울시립미술관",
-    description: "모네, 르누아르 등 인상주의 거장들의 작품 전시",
-  },
-  {
-    id: "3",
-    title: "한국 현대 조각",
-    subtitle: "2024.02.10 - 2024.05.15",
-    location: "예술의전당",
-    description: "한국 현대 조각가들의 작품을 만나보세요",
-  },
-];
+import { exhibitions } from "../data/exhibitions";
 
 /**
  * 메인 페이지 컴포넌트
@@ -52,7 +24,7 @@ export default function HomeScreen() {
 
   // 전시 카드별 애니메이션
   const cardAnims = useRef(
-    Array.from({ length: ongoingExhibitions.length }, () => ({
+    Array.from({ length: exhibitions.length }, () => ({
       opacity: new Animated.Value(0),
       translateY: new Animated.Value(30),
     }))
@@ -113,7 +85,7 @@ export default function HomeScreen() {
 
         {/* 전시 목록 */}
         <View style={styles.exhibitionList}>
-          {ongoingExhibitions.map((exhibition, index) => (
+          {exhibitions.map((exhibition, index) => (
             <Animated.View
               key={exhibition.id}
               style={[

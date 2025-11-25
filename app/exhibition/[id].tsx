@@ -16,83 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { colors } from "../../theme/colors";
-import { typography } from "../../theme/typography";
-
-/**
- * 전시 데이터 (임시)
- * TODO: 실제 API에서 데이터를 가져오도록 수정
- */
-const exhibitionData: Record<string, any> = {
-  "1": {
-    id: "1",
-    title: "현대 미술의 흐름",
-    subtitle: "2024.01.15 - 2024.03.31",
-    location: "국립현대미술관",
-    description: "20세기부터 현재까지의 현대 미술 작품들을 한눈에",
-    artworks: [
-      {
-        id: "1-1",
-        title: "작품 1",
-        artist: "작가명",
-        audioUrl: "/audio/1-1.mp3",
-        duration: "3:24",
-      },
-      {
-        id: "1-2",
-        title: "작품 2",
-        artist: "작가명",
-        audioUrl: "/audio/1-2.mp3",
-        duration: "4:12",
-      },
-      {
-        id: "1-3",
-        title: "작품 3",
-        artist: "작가명",
-        audioUrl: "/audio/1-3.mp3",
-        duration: "2:45",
-      },
-    ],
-  },
-  "2": {
-    id: "2",
-    title: "인상주의의 빛",
-    subtitle: "2024.02.01 - 2024.04.30",
-    location: "서울시립미술관",
-    description: "모네, 르누아르 등 인상주의 거장들의 작품 전시",
-    artworks: [
-      {
-        id: "2-1",
-        title: "작품 1",
-        artist: "작가명",
-        audioUrl: "/audio/2-1.mp3",
-        duration: "3:24",
-      },
-      {
-        id: "2-2",
-        title: "작품 2",
-        artist: "작가명",
-        audioUrl: "/audio/2-2.mp3",
-        duration: "4:12",
-      },
-    ],
-  },
-  "3": {
-    id: "3",
-    title: "한국 현대 조각",
-    subtitle: "2024.02.10 - 2024.05.15",
-    location: "예술의전당",
-    description: "한국 현대 조각가들의 작품을 만나보세요",
-    artworks: [
-      {
-        id: "3-1",
-        title: "작품 1",
-        artist: "작가명",
-        audioUrl: "/audio/3-1.mp3",
-        duration: "3:24",
-      },
-    ],
-  },
-};
+import { getExhibitionById } from "../../data/exhibitions";
+import type { Exhibition } from "../../data/exhibitions";
 
 /**
  * 전시 오디오 가이드 페이지 컴포넌트
@@ -100,12 +25,10 @@ const exhibitionData: Record<string, any> = {
 export default function ExhibitionGuideScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [exhibition, setExhibition] = useState<any>(null);
+  const [exhibition, setExhibition] = useState<Exhibition | undefined>(undefined);
 
   useEffect(() => {
-    if (id && exhibitionData[id]) {
-      setExhibition(exhibitionData[id]);
-    }
+    setExhibition(getExhibitionById(id));
   }, [id]);
 
   if (!exhibition) {
@@ -156,13 +79,12 @@ export default function ExhibitionGuideScreen() {
         {/* 작품 목록 */}
         <View style={styles.artworkList}>
           <Text style={styles.sectionTitle}>오디오 가이드</Text>
-          {exhibition.artworks.map((artwork: any, index: number) => (
+          {exhibition.artworks.map((artwork, index) => (
             <TouchableOpacity
               key={artwork.id}
               style={styles.artworkCard}
               onPress={() => {
-                // TODO: 오디오 재생 페이지로 이동
-                console.log("Play audio:", artwork.audioUrl);
+                router.push(`/exhibition/${exhibition.id}/audio/${artwork.id}`);
               }}
             >
               <View style={styles.artworkNumber}>
