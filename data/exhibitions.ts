@@ -4,6 +4,9 @@ export interface Artwork {
   artist: string;
   audioUrl: string;
   duration: string;
+  imageUrl?: string; // 앨범 아트워크 이미지 (선택적)
+  displayMode?: 'standard' | 'fullscreen'; // 표시 모드 (기본값: standard)
+  backgroundColor?: string; // fullscreen 모드에서 이미지 없을 때 사용할 배경색
 }
 
 export interface Exhibition {
@@ -29,6 +32,7 @@ export const exhibitions: Exhibition[] = [
         artist: "작가명",
         audioUrl: "https://example.com/audio/1-1.mp3",
         duration: "3:24",
+        displayMode: "standard", // 기본 정사각형 모드
       },
       {
         id: "1-2",
@@ -36,6 +40,8 @@ export const exhibitions: Exhibition[] = [
         artist: "작가명",
         audioUrl: "https://example.com/audio/1-2.mp3",
         duration: "4:12",
+        displayMode: "fullscreen", // 전체 화면 모드
+        backgroundColor: "#1a5490", // 파란색 그라데이션
       },
       {
         id: "1-3",
@@ -43,6 +49,8 @@ export const exhibitions: Exhibition[] = [
         artist: "작가명",
         audioUrl: "https://example.com/audio/1-3.mp3",
         duration: "2:45",
+        displayMode: "fullscreen", // 전체 화면 모드
+        backgroundColor: "#8b3a62", // 보라색 그라데이션
       },
     ],
   },
@@ -59,6 +67,8 @@ export const exhibitions: Exhibition[] = [
         artist: "작가명",
         audioUrl: "https://example.com/audio/2-1.mp3",
         duration: "3:24",
+        displayMode: "fullscreen",
+        backgroundColor: "#2d5016", // 녹색 그라데이션
       },
       {
         id: "2-2",
@@ -66,6 +76,7 @@ export const exhibitions: Exhibition[] = [
         artist: "작가명",
         audioUrl: "https://example.com/audio/2-2.mp3",
         duration: "4:12",
+        displayMode: "standard",
       },
     ],
   },
@@ -82,6 +93,8 @@ export const exhibitions: Exhibition[] = [
         artist: "작가명",
         audioUrl: "https://example.com/audio/3-1.mp3",
         duration: "3:24",
+        displayMode: "fullscreen",
+        backgroundColor: "#8b4513", // 브라운 그라데이션
       },
     ],
   },

@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Dimensions, ScrollView, PanResponder } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Dimensions, ScrollView, PanResponder, ImageBackground } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Audio, AVPlaybackStatusSuccess } from "expo-av";
@@ -31,6 +31,11 @@ export default function ArtworkAudioScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const borderRadiusAnim = useRef(new Animated.Value(0)).current; // 드래그 시 모서리 둥글기
+
+  // displayMode 결정 (기본값: standard)
+  const displayMode = artwork?.displayMode ?? "standard";
+  const isFullscreen = displayMode === "fullscreen";
 
   const panResponder = useRef(
     PanResponder.create({
@@ -40,7 +45,8 @@ export default function ArtworkAudioScreen() {
         return gestureState.dy > 10;
       },
       onPanResponderGrant: () => {
-        // 드래그 시작 - dismissProgress는 이미 0
+        // 드래그 시작 - 바로 모서리를 둥글게
+        borderRadiusAnim.setValue(scale(12));
       },
       onPanResponderMove: (_, gestureState) => {
         // 아래로만 드래그 가능
@@ -57,6 +63,8 @@ export default function ArtworkAudioScreen() {
           // 스케일 효과: 1 → 0.92 (최대 8% 축소)
           const scaleValue = 1 - progress * 0.08;
           scaleAnim.setValue(scaleValue);
+
+          // 모서리는 이미 둥글게 설정되어 있으므로 유지
         }
       },
       onPanResponderRelease: (_, gestureState) => {
@@ -79,6 +87,11 @@ export default function ArtworkAudioScreen() {
               toValue: 1,
               duration: 250,
               useNativeDriver: true,
+            }),
+            Animated.timing(borderRadiusAnim, {
+              toValue: scale(12),
+              duration: 250,
+              useNativeDriver: false, // borderRadius는 네이티브 드라이버 미지원
             }),
           ]).start(() => {
             router.back();
@@ -104,6 +117,12 @@ export default function ArtworkAudioScreen() {
               friction: 10,
               useNativeDriver: true,
             }),
+            Animated.spring(borderRadiusAnim, {
+              toValue: 0,
+              tension: 65,
+              friction: 10,
+              useNativeDriver: false, // borderRadius는 네이티브 드라이버 미지원
+            }),
           ]).start();
         }
       },
@@ -114,9 +133,10 @@ export default function ArtworkAudioScreen() {
   const position = status?.isLoaded ? status.positionMillis ?? 0 : 0;
   const duration = status?.isLoaded ? status.durationMillis ?? 0 : 0;
 
-  // 재생 페이지가 마운트될 때 뒤 페이지 축소
+  // 재생 페이지가 마운트될 때 뒤 페이지 축소 및 모서리 초기화
   useEffect(() => {
     dismissProgress.setValue(0);
+    borderRadiusAnim.setValue(0); // 처음에는 모서리가 직각
 
     return () => {
       if (sound) {
@@ -143,7 +163,7 @@ export default function ArtworkAudioScreen() {
   const progress = duration > 0 ? position / duration : 0;
 
   // 반응형 스타일
-  const styles = useMemo(() => createStyles(scale, moderateScale, ARTWORK_SIZE), [scale, moderateScale, ARTWORK_SIZE]);
+  const styles = useMemo(() => createStyles(scale, moderateScale, ARTWORK_SIZE, isFullscreen), [scale, moderateScale, ARTWORK_SIZE, isFullscreen]);
 
   const handleTogglePlayback = async () => {
     if (!artwork) return;
@@ -194,6 +214,31 @@ export default function ArtworkAudioScreen() {
     );
   }
 
+  // 배경 컴포넌트 렌더링 (Fullscreen 모드용)
+  const renderBackground = () => {
+    if (!isFullscreen) return null;
+
+    const bgColor = artwork.backgroundColor ?? "#1a1a1a";
+
+    // 이미지가 있으면 ImageBackground, 없으면 색상 배경
+    if (artwork.imageUrl) {
+      return (
+        <ImageBackground source={{ uri: artwork.imageUrl }} style={styles.fullscreenBackground} resizeMode="cover">
+          <View style={styles.fullscreenOverlay} />
+        </ImageBackground>
+      );
+    }
+
+    // 이미지가 없을 때는 그라데이션 효과를 위해 여러 레이어 사용
+    return (
+      <View style={styles.fullscreenBackground}>
+        <View style={[styles.gradientLayer1, { backgroundColor: bgColor }]} />
+        <View style={styles.gradientLayer2} />
+        <View style={styles.fullscreenOverlay} />
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <StatusBar style="light" />
@@ -202,7 +247,7 @@ export default function ArtworkAudioScreen() {
           styles.container,
           {
             transform: [{ translateY }, { scale: scaleAnim }],
-            borderRadius: scale(12),
+            borderRadius: borderRadiusAnim, // 드래그 시에만 둥글게
             overflow: "hidden",
             shadowColor: "#000",
             shadowOffset: { width: 0, height: scale(-2) },
@@ -213,22 +258,30 @@ export default function ArtworkAudioScreen() {
         ]}
         {...panResponder.panHandlers}
       >
+        {/* Fullscreen 모드일 때 배경 */}
+        {renderBackground()}
+
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} bounces={false}>
           {/* 드래그 핸들 바 */}
           <View style={styles.dragHandleContainer}>
             <View style={styles.dragHandle} />
           </View>
 
-          {/* 아트워크 이미지 */}
-          <View style={styles.artworkContainer}>
-            <View style={styles.artworkWrapper}>
-              <View style={styles.artworkPlaceholder}>
-                <View style={styles.artworkGradient}>
-                  <Text style={styles.artworkIcon}>🎨</Text>
+          {/* 아트워크 이미지 (Standard 모드에만 표시) */}
+          {!isFullscreen && (
+            <View style={styles.artworkContainer}>
+              <View style={styles.artworkWrapper}>
+                <View style={styles.artworkPlaceholder}>
+                  <View style={styles.artworkGradient}>
+                    <Text style={styles.artworkIcon}>🎨</Text>
+                  </View>
                 </View>
               </View>
             </View>
-          </View>
+          )}
+
+          {/* Fullscreen 모드일 때 상단 여백 */}
+          {isFullscreen && <View style={styles.fullscreenTopSpacer} />}
 
           {/* 작품 정보 */}
           <View style={styles.trackInfo}>
@@ -267,10 +320,6 @@ export default function ArtworkAudioScreen() {
           {/* 재생 컨트롤 */}
           <View style={styles.controlsContainer}>
             <TouchableOpacity style={styles.controlButton} onPress={() => {}} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.controlButtonText}>🔀</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.controlButton} onPress={() => {}} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.controlButtonText}>⏮</Text>
             </TouchableOpacity>
 
@@ -280,10 +329,6 @@ export default function ArtworkAudioScreen() {
 
             <TouchableOpacity style={styles.controlButton} onPress={() => {}} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.controlButtonText}>⏭</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.controlButton} onPress={() => {}} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.controlButtonText}>🔁</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -299,7 +344,7 @@ function formatMillis(value: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-const createStyles = (scale: (size: number) => number, moderateScale: (size: number, factor?: number) => number, artworkSize: number) =>
+const createStyles = (scale: (size: number) => number, moderateScale: (size: number, factor?: number) => number, artworkSize: number, isFullscreen: boolean) =>
   StyleSheet.create({
     safeArea: {
       flex: 1,
@@ -307,7 +352,7 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
     },
     container: {
       flex: 1,
-      backgroundColor: colors.background.primary,
+      backgroundColor: isFullscreen ? "transparent" : colors.background.primary,
     },
     scrollContent: {
       flexGrow: 1,
@@ -455,5 +500,30 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
       fontSize: moderateScale(32),
       color: colors.background.primary,
       marginLeft: scale(3),
+    },
+    // Fullscreen 모드 전용 스타일
+    fullscreenBackground: {
+      position: "absolute" as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: "100%",
+      height: "100%",
+    },
+    fullscreenOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0, 0, 0, 0.4)", // 반투명 오버레이
+    },
+    gradientLayer1: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    gradientLayer2: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0, 0, 0, 0.2)",
+      opacity: 0.8,
+    },
+    fullscreenTopSpacer: {
+      height: scale(120), // Standard 모드의 아트워크를 대체하는 여백
     },
   });
