@@ -4,8 +4,8 @@ export interface Artwork {
   artist: string;
   audioUrl: string;
   duration: string;
-  imageUrl?: string; // 앨범 아트워크 이미지 (선택적)
-  displayMode?: 'standard' | 'fullscreen'; // 표시 모드 (기본값: standard)
+  imageUrl?: any; // 앨범 아트워크 이미지 (선택적, require() 또는 { uri: string })
+  displayMode?: "standard" | "fullscreen"; // 표시 모드 (기본값: standard)
   backgroundColor?: string; // fullscreen 모드에서 이미지 없을 때 사용할 배경색
 }
 
@@ -28,27 +28,30 @@ export const exhibitions: Exhibition[] = [
     artworks: [
       {
         id: "1-1",
-        title: "작품 1",
-        artist: "작가명",
+        title: "연못",
+        artist: "클로드 모네",
         audioUrl: "https://example.com/audio/1-1.mp3",
         duration: "3:24",
+        imageUrl: require("./image/모네_1.jpeg"),
         displayMode: "standard", // 기본 정사각형 모드
       },
       {
         id: "1-2",
-        title: "작품 2",
-        artist: "작가명",
+        title: "지베르니",
+        artist: "클로드 모네",
         audioUrl: "https://example.com/audio/1-2.mp3",
         duration: "4:12",
+        imageUrl: require("./image/모네_2.jpg"),
         displayMode: "fullscreen", // 전체 화면 모드
         backgroundColor: "#1a5490", // 파란색 그라데이션
       },
       {
         id: "1-3",
-        title: "작품 3",
-        artist: "작가명",
+        title: "수련연못",
+        artist: "클로드 모네",
         audioUrl: "https://example.com/audio/1-3.mp3",
         duration: "2:45",
+        imageUrl: require("./image/모네_3.jpeg"),
         displayMode: "fullscreen", // 전체 화면 모드
         backgroundColor: "#8b3a62", // 보라색 그라데이션
       },

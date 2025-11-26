@@ -4,11 +4,12 @@
  */
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Dimensions, ScrollView, PanResponder, ImageBackground } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Dimensions, ScrollView, PanResponder, ImageBackground, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Audio, AVPlaybackStatusSuccess } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../../../theme/colors";
 import { getArtworkById } from "../../../../data/exhibitions";
 import { useDismissGesture } from "../../../../contexts/DismissGestureContext";
@@ -31,11 +32,17 @@ export default function ArtworkAudioScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const borderRadiusAnim = useRef(new Animated.Value(0)).current; // 드래그 시 모서리 둥글기
 
   // displayMode 결정 (기본값: standard)
   const displayMode = artwork?.displayMode ?? "standard";
   const isFullscreen = displayMode === "fullscreen";
+
+  // translateY를 기반으로 borderRadius를 동적으로 계산 (드래그 시작하면 바로 둥글게)
+  const borderRadiusAnim = translateY.interpolate({
+    inputRange: [0, 10],
+    outputRange: [0, scale(48)],
+    extrapolate: "clamp",
+  });
 
   const panResponder = useRef(
     PanResponder.create({
@@ -43,10 +50,6 @@ export default function ArtworkAudioScreen() {
       onMoveShouldSetPanResponder: (_, gestureState) => {
         // 아래로 드래그할 때만 반응
         return gestureState.dy > 10;
-      },
-      onPanResponderGrant: () => {
-        // 드래그 시작 - 바로 모서리를 둥글게
-        borderRadiusAnim.setValue(scale(12));
       },
       onPanResponderMove: (_, gestureState) => {
         // 아래로만 드래그 가능
@@ -63,8 +66,6 @@ export default function ArtworkAudioScreen() {
           // 스케일 효과: 1 → 0.92 (최대 8% 축소)
           const scaleValue = 1 - progress * 0.08;
           scaleAnim.setValue(scaleValue);
-
-          // 모서리는 이미 둥글게 설정되어 있으므로 유지
         }
       },
       onPanResponderRelease: (_, gestureState) => {
@@ -87,11 +88,6 @@ export default function ArtworkAudioScreen() {
               toValue: 1,
               duration: 250,
               useNativeDriver: true,
-            }),
-            Animated.timing(borderRadiusAnim, {
-              toValue: scale(12),
-              duration: 250,
-              useNativeDriver: false, // borderRadius는 네이티브 드라이버 미지원
             }),
           ]).start(() => {
             router.back();
@@ -117,12 +113,6 @@ export default function ArtworkAudioScreen() {
               friction: 10,
               useNativeDriver: true,
             }),
-            Animated.spring(borderRadiusAnim, {
-              toValue: 0,
-              tension: 65,
-              friction: 10,
-              useNativeDriver: false, // borderRadius는 네이티브 드라이버 미지원
-            }),
           ]).start();
         }
       },
@@ -133,10 +123,9 @@ export default function ArtworkAudioScreen() {
   const position = status?.isLoaded ? status.positionMillis ?? 0 : 0;
   const duration = status?.isLoaded ? status.durationMillis ?? 0 : 0;
 
-  // 재생 페이지가 마운트될 때 뒤 페이지 축소 및 모서리 초기화
+  // 재생 페이지가 마운트될 때 뒤 페이지 축소
   useEffect(() => {
     dismissProgress.setValue(0);
-    borderRadiusAnim.setValue(0); // 처음에는 모서리가 직각
 
     return () => {
       if (sound) {
@@ -223,7 +212,7 @@ export default function ArtworkAudioScreen() {
     // 이미지가 있으면 ImageBackground, 없으면 색상 배경
     if (artwork.imageUrl) {
       return (
-        <ImageBackground source={{ uri: artwork.imageUrl }} style={styles.fullscreenBackground} resizeMode="cover">
+        <ImageBackground source={artwork.imageUrl} style={styles.fullscreenBackground} resizeMode="cover">
           <View style={styles.fullscreenOverlay} />
         </ImageBackground>
       );
@@ -247,7 +236,8 @@ export default function ArtworkAudioScreen() {
           styles.container,
           {
             transform: [{ translateY }, { scale: scaleAnim }],
-            borderRadius: borderRadiusAnim, // 드래그 시에만 둥글게
+            borderTopLeftRadius: borderRadiusAnim, // 드래그 시 위쪽 모서리만 둥글게
+            borderTopRightRadius: borderRadiusAnim,
             overflow: "hidden",
             shadowColor: "#000",
             shadowOffset: { width: 0, height: scale(-2) },
@@ -261,77 +251,89 @@ export default function ArtworkAudioScreen() {
         {/* Fullscreen 모드일 때 배경 */}
         {renderBackground()}
 
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} bounces={false}>
-          {/* 드래그 핸들 바 */}
-          <View style={styles.dragHandleContainer}>
-            <View style={styles.dragHandle} />
-          </View>
+        <View style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} bounces={false}>
+            {/* 드래그 핸들 바 */}
+            <View style={styles.dragHandleContainer}>
+              <View style={styles.dragHandle} />
+            </View>
 
-          {/* 아트워크 이미지 (Standard 모드에만 표시) */}
-          {!isFullscreen && (
-            <View style={styles.artworkContainer}>
-              <View style={styles.artworkWrapper}>
-                <View style={styles.artworkPlaceholder}>
-                  <View style={styles.artworkGradient}>
-                    <Text style={styles.artworkIcon}>🎨</Text>
+            {/* 아트워크 이미지 (Standard 모드에만 표시) */}
+            {!isFullscreen && (
+              <View style={styles.artworkContainer}>
+                <View style={styles.artworkWrapper}>
+                  <View style={styles.artworkPlaceholder}>
+                    {artwork.imageUrl ? (
+                      <Image source={artwork.imageUrl} style={styles.artworkImage} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.artworkGradient}>
+                        <Text style={styles.artworkIcon}>🎨</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               </View>
+            )}
+
+            {/* Fullscreen 모드일 때 상단 여백 */}
+            {isFullscreen && <View style={styles.fullscreenTopSpacer} />}
+          </ScrollView>
+
+          {/* 하단 영역: 그라데이션 배경과 컨트롤 */}
+          <View style={styles.bottomContainer} pointerEvents="box-none">
+            {/* 자연스러운 그라데이션 배경 (Fullscreen 모드에만) */}
+            {isFullscreen && <LinearGradient colors={["rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.7)", "rgba(0, 0, 0, 0.95)"]} locations={[0, 0.4, 1]} style={styles.gradientBackground} pointerEvents="none" />}
+
+            {/* 작품 정보 */}
+            <View style={styles.trackInfo}>
+              <Text style={styles.trackTitle} numberOfLines={2}>
+                {artwork.title}
+              </Text>
+              <Text style={styles.trackArtist} numberOfLines={1}>
+                {artwork.artist}
+              </Text>
+              <Text style={styles.trackAlbum} numberOfLines={1}>
+                {exhibition.title}
+              </Text>
             </View>
-          )}
 
-          {/* Fullscreen 모드일 때 상단 여백 */}
-          {isFullscreen && <View style={styles.fullscreenTopSpacer} />}
-
-          {/* 작품 정보 */}
-          <View style={styles.trackInfo}>
-            <Text style={styles.trackTitle} numberOfLines={2}>
-              {artwork.title}
-            </Text>
-            <Text style={styles.trackArtist} numberOfLines={1}>
-              {artwork.artist}
-            </Text>
-            <Text style={styles.trackAlbum} numberOfLines={1}>
-              {exhibition.title}
-            </Text>
-          </View>
-
-          {/* 진행 바 */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <Animated.View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: progressAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ["0%", "100%"],
-                    }),
-                  },
-                ]}
-              />
+            {/* 진행 바 */}
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBar}>
+                <Animated.View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: progressAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ["0%", "100%"],
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+              <View style={styles.timeContainer}>
+                <Text style={styles.timeText}>{formattedPosition}</Text>
+                <Text style={styles.timeText}>{formattedDuration}</Text>
+              </View>
             </View>
-            <View style={styles.timeContainer}>
-              <Text style={styles.timeText}>{formattedPosition}</Text>
-              <Text style={styles.timeText}>{formattedDuration}</Text>
+
+            {/* 재생 컨트롤 */}
+            <View style={styles.controlsContainer}>
+              <TouchableOpacity style={styles.controlButton} onPress={() => {}} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.controlButtonText}>⏮</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.playPauseButton} onPress={handleTogglePlayback} disabled={isLoading} activeOpacity={0.8}>
+                {isLoading ? <ActivityIndicator color="#000" size="large" /> : <Text style={styles.playPauseIcon}>{isPlaying ? "⏸" : "▶"}</Text>}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.controlButton} onPress={() => {}} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.controlButtonText}>⏭</Text>
+              </TouchableOpacity>
             </View>
           </View>
-
-          {/* 재생 컨트롤 */}
-          <View style={styles.controlsContainer}>
-            <TouchableOpacity style={styles.controlButton} onPress={() => {}} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.controlButtonText}>⏮</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.playPauseButton} onPress={handleTogglePlayback} disabled={isLoading} activeOpacity={0.8}>
-              {isLoading ? <ActivityIndicator color="#000" size="large" /> : <Text style={styles.playPauseIcon}>{isPlaying ? "⏸" : "▶"}</Text>}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.controlButton} onPress={() => {}} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.controlButtonText}>⏭</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+        </View>
       </Animated.View>
     </SafeAreaView>
   );
@@ -356,13 +358,12 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
     },
     scrollContent: {
       flexGrow: 1,
-      paddingBottom: scale(40),
       paddingTop: scale(8),
     },
     dragHandleContainer: {
       alignItems: "center" as const,
-      paddingTop: scale(12),
-      paddingBottom: scale(20),
+      paddingTop: scale(8),
+      paddingBottom: scale(12),
     },
     dragHandle: {
       width: scale(36),
@@ -384,7 +385,8 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
     artworkContainer: {
       alignItems: "center" as const,
       paddingHorizontal: scale(20),
-      marginBottom: scale(40),
+      marginTop: scale(20),
+      marginBottom: scale(32),
     },
     artworkWrapper: {
       width: artworkSize,
@@ -402,6 +404,10 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
       overflow: "hidden" as const,
       backgroundColor: "#1a1a1a",
     },
+    artworkImage: {
+      width: "100%",
+      height: "100%",
+    },
     artworkGradient: {
       width: "100%",
       height: "100%",
@@ -416,7 +422,7 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
     trackInfo: {
       paddingHorizontal: scale(20),
       alignItems: "center" as const,
-      marginBottom: scale(40),
+      marginBottom: scale(32),
     },
     trackTitle: {
       fontSize: moderateScale(24),
@@ -441,7 +447,7 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
     },
     progressContainer: {
       paddingHorizontal: scale(20),
-      marginBottom: scale(50),
+      marginBottom: scale(16),
     },
     progressBar: {
       width: "100%",
@@ -471,6 +477,7 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
       alignItems: "center" as const,
       justifyContent: "center" as const,
       paddingHorizontal: scale(20),
+      marginTop: scale(16),
       gap: scale(32),
     },
     controlButton: {
@@ -524,6 +531,20 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
       opacity: 0.8,
     },
     fullscreenTopSpacer: {
-      height: scale(120), // Standard 모드의 아트워크를 대체하는 여백
+      height: scale(80), // Standard 모드의 아트워크를 대체하는 여백
+    },
+    bottomContainer: {
+      position: "absolute" as const,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      paddingBottom: scale(50),
+    },
+    gradientBackground: {
+      position: "absolute" as const,
+      top: -scale(150), // 위로 확장하여 자연스러운 블렌딩
+      left: 0,
+      right: 0,
+      bottom: 0,
     },
   });
