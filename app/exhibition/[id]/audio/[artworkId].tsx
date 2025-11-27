@@ -29,6 +29,7 @@ export default function ArtworkAudioScreen() {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [status, setStatus] = useState<AVPlaybackStatusSuccess | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [volume, setVolume] = useState(1.0); // 볼륨 상태 (0.0 ~ 1.0)
   const progressAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -160,7 +161,7 @@ export default function ArtworkAudioScreen() {
     try {
       if (!sound) {
         setIsLoading(true);
-        const { sound: newSound } = await Audio.Sound.createAsync({ uri: artwork.audioUrl }, { shouldPlay: true });
+        const { sound: newSound } = await Audio.Sound.createAsync({ uri: artwork.audioUrl }, { shouldPlay: true, volume });
 
         newSound.setOnPlaybackStatusUpdate((nextStatus) => {
           if (nextStatus.isLoaded) {
@@ -186,6 +187,18 @@ export default function ArtworkAudioScreen() {
     } catch (error) {
       console.warn("Audio playback error", error);
       setIsLoading(false);
+    }
+  };
+
+  // 볼륨 조절 핸들러
+  const handleVolumeChange = async (newVolume: number) => {
+    setVolume(newVolume);
+    if (sound) {
+      try {
+        await sound.setVolumeAsync(newVolume);
+      } catch (error) {
+        console.warn("Volume change error", error);
+      }
     }
   };
 
@@ -332,6 +345,9 @@ export default function ArtworkAudioScreen() {
                 <Text style={styles.controlButtonText}>⏭</Text>
               </TouchableOpacity>
             </View>
+
+            {/* 볼륨 컨트롤 */}
+            <VolumeSlider volume={volume} onVolumeChange={handleVolumeChange} scale={scale} moderateScale={moderateScale} />
           </View>
         </View>
       </Animated.View>
@@ -345,6 +361,98 @@ function formatMillis(value: number) {
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
+
+// 볼륨 슬라이더 컴포넌트
+interface VolumeSliderProps {
+  volume: number;
+  onVolumeChange: (volume: number) => void;
+  scale: (size: number) => number;
+  moderateScale: (size: number, factor?: number) => number;
+}
+
+function VolumeSlider({ volume, onVolumeChange, scale, moderateScale }: VolumeSliderProps) {
+  const sliderWidth = useRef(0);
+  const panX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        // 터치 시작 위치에서 볼륨 계산
+        const touchX = evt.nativeEvent.locationX;
+        const newVolume = Math.max(0, Math.min(1, touchX / sliderWidth.current));
+        onVolumeChange(newVolume);
+      },
+      onPanResponderMove: (evt) => {
+        // 드래그 중 볼륨 계산
+        const touchX = evt.nativeEvent.locationX;
+        const newVolume = Math.max(0, Math.min(1, touchX / sliderWidth.current));
+        onVolumeChange(newVolume);
+      },
+    })
+  ).current;
+
+  const handleLayout = (event: { nativeEvent: { layout: { width: number } } }) => {
+    sliderWidth.current = event.nativeEvent.layout.width;
+  };
+
+  // 볼륨 아이콘 결정
+  const getVolumeIcon = () => {
+    if (volume === 0) return "🔇";
+    if (volume < 0.33) return "🔈";
+    if (volume < 0.66) return "🔉";
+    return "🔊";
+  };
+
+  return (
+    <View style={volumeStyles(scale, moderateScale).container}>
+      <Text style={volumeStyles(scale, moderateScale).icon}>{getVolumeIcon()}</Text>
+      <View style={volumeStyles(scale, moderateScale).sliderContainer} onLayout={handleLayout} {...panResponder.panHandlers}>
+        <View style={volumeStyles(scale, moderateScale).track}>
+          <View style={[volumeStyles(scale, moderateScale).fill, { width: `${volume * 100}%` }]} />
+        </View>
+      </View>
+      <Text style={volumeStyles(scale, moderateScale).iconRight}>🔊</Text>
+    </View>
+  );
+}
+
+const volumeStyles = (scale: (size: number) => number, moderateScale: (size: number, factor?: number) => number) =>
+  StyleSheet.create({
+    container: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: scale(20),
+      marginTop: scale(28),
+      gap: scale(12),
+    },
+    icon: {
+      fontSize: moderateScale(16),
+      opacity: 0.6,
+    },
+    iconRight: {
+      fontSize: moderateScale(16),
+      opacity: 0.6,
+    },
+    sliderContainer: {
+      flex: 1,
+      height: scale(32),
+      justifyContent: "center",
+    },
+    track: {
+      width: "100%",
+      height: scale(4),
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      borderRadius: scale(2),
+      overflow: "hidden",
+    },
+    fill: {
+      height: "100%",
+      backgroundColor: "rgba(255, 255, 255, 0.7)",
+      borderRadius: scale(2),
+    },
+  });
 
 const createStyles = (scale: (size: number) => number, moderateScale: (size: number, factor?: number) => number, artworkSize: number, isFullscreen: boolean) =>
   StyleSheet.create({
