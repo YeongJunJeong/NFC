@@ -442,15 +442,15 @@ const volumeStyles = (scale: (size: number) => number, moderateScale: (size: num
     },
     track: {
       width: "100%",
-      height: scale(4),
+      height: scale(6),
       backgroundColor: "rgba(255, 255, 255, 0.2)",
-      borderRadius: scale(2),
+      borderRadius: scale(3),
       overflow: "hidden",
     },
     fill: {
       height: "100%",
       backgroundColor: "rgba(255, 255, 255, 0.7)",
-      borderRadius: scale(2),
+      borderRadius: scale(3),
     },
   });
 
@@ -559,16 +559,16 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
     },
     progressBar: {
       width: "100%",
-      height: scale(4),
+      height: scale(6),
       backgroundColor: "rgba(255, 255, 255, 0.2)",
-      borderRadius: scale(2),
+      borderRadius: scale(3),
       marginBottom: scale(8),
       overflow: "hidden" as const,
     },
     progressFill: {
       height: "100%",
       backgroundColor: colors.text.primary,
-      borderRadius: scale(2),
+      borderRadius: scale(3),
     },
     timeContainer: {
       flexDirection: "row" as const,

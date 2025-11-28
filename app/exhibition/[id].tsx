@@ -69,7 +69,7 @@ export default function ExhibitionGuideScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* 헤더 */}
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.replace("/")}>
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
             <View style={styles.headerContent}>
@@ -81,13 +81,26 @@ export default function ExhibitionGuideScreen() {
           <View style={styles.exhibitionInfo}>
             <Text style={styles.title}>{exhibition.title}</Text>
             <Text style={styles.location}>{exhibition.location}</Text>
-            <Text style={styles.subtitle}>{exhibition.subtitle}</Text>
             <Text style={styles.description}>{exhibition.description}</Text>
           </View>
 
           {/* 작품 목록 */}
           <View style={styles.artworkList}>
-            <Text style={styles.sectionTitle}>오디오 가이드</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>오디오 가이드</Text>
+              <TouchableOpacity
+                style={styles.playAllButton}
+                onPress={() => {
+                  // 첫 번째 작품부터 재생 시작
+                  if (exhibition.artworks.length > 0) {
+                    router.push(`/exhibition/${exhibition.id}/audio/${exhibition.artworks[0].id}`);
+                  }
+                }}
+              >
+                <Text style={styles.playAllIcon}>▶</Text>
+                <Text style={styles.playAllText}>전체 재생</Text>
+              </TouchableOpacity>
+            </View>
             {exhibition.artworks.map((artwork, index) => (
               <TouchableOpacity
                 key={artwork.id}
@@ -153,6 +166,7 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
       fontSize: moderateScale(24),
       color: colors.text.primary,
       fontWeight: "300" as const,
+      marginTop: scale(-1),
     },
     headerContent: {
       flex: 1,
@@ -169,6 +183,7 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
       marginBottom: scale(20),
     },
     exhibitionInfo: {
+      marginTop: scale(14),
       marginBottom: scale(40),
       paddingBottom: scale(24),
       borderBottomWidth: 1,
@@ -205,12 +220,38 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
     artworkList: {
       gap: scale(12),
     },
+    sectionHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      marginBottom: scale(16),
+    },
     sectionTitle: {
       fontSize: moderateScale(16),
       fontWeight: "400" as const,
       color: colors.text.primary,
-      marginBottom: scale(16),
       letterSpacing: 0.5,
+    },
+    playAllButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: "rgba(255, 255, 255, 0.08)",
+      paddingHorizontal: scale(14),
+      paddingVertical: scale(8),
+      borderRadius: scale(20),
+      gap: scale(6),
+      borderWidth: 1,
+      borderColor: "rgba(139, 134, 134, 0.4)",
+    },
+    playAllIcon: {
+      fontSize: moderateScale(10),
+      color: colors.text.primary,
+    },
+    playAllText: {
+      fontSize: moderateScale(13),
+      fontWeight: "400" as const,
+      color: colors.text.primary,
+      letterSpacing: 0.3,
     },
     artworkCard: {
       backgroundColor: colors.background.card,
@@ -219,7 +260,7 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
       flexDirection: "row" as const,
       alignItems: "center" as const,
       borderWidth: 1,
-      borderColor: "rgba(255, 255, 255, 0.03)",
+      borderColor: "rgba(143, 135, 135, 0.4)",
       ...(Platform.OS === "web" &&
         ({
           transition: "all 0.3s ease",
