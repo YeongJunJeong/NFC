@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Dimensions, ScrollView, PanResponder, ImageBackground, Image } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Dimensions, ScrollView, PanResponder, ImageBackground, Image, ViewStyle, TextStyle, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Audio, AVPlaybackStatusSuccess } from "expo-av";
@@ -33,6 +33,9 @@ export default function ArtworkAudioScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const statusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // 웹 환경용 HTML5 Audio
+  const webAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // displayMode 결정 (기본값: standard)
   const displayMode = artwork?.displayMode ?? "standard";
@@ -120,21 +123,129 @@ export default function ArtworkAudioScreen() {
     })
   ).current;
 
-  const isPlaying = status?.isLoaded ? status.isPlaying : false;
-  const position = status?.isLoaded ? status.positionMillis ?? 0 : 0;
-  const duration = status?.isLoaded ? status.durationMillis ?? 0 : 0;
+  // 웹 환경에서는 HTML5 Audio 상태를 직접 관리
+  const [webAudioState, setWebAudioState] = useState<{
+    isPlaying: boolean;
+    position: number;
+    duration: number;
+  }>({
+    isPlaying: false,
+    position: 0,
+    duration: 0,
+  });
 
-  // 재생 페이지가 마운트될 때 뒤 페이지 축소
+  const isPlaying = Platform.OS === "web" ? webAudioState.isPlaying : status?.isLoaded ? status.isPlaying : false;
+  const position = Platform.OS === "web" ? webAudioState.position : status?.isLoaded ? status.positionMillis ?? 0 : 0;
+  const duration = Platform.OS === "web" ? webAudioState.duration : status?.isLoaded ? status.durationMillis ?? 0 : 0;
+
+  // 재생 페이지가 마운트될 때 뒤 페이지 축소 및 오디오 모드 설정
   useEffect(() => {
     dismissProgress.setValue(0);
 
+    // 오디오 모드 설정 (웹에서는 일부 옵션이 작동하지 않을 수 있음)
+    if (Platform.OS !== "web") {
+      Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      }).catch((error) => {
+        console.warn("Failed to set audio mode:", error);
+      });
+    }
+
     return () => {
-      if (sound) {
-        sound.unloadAsync();
+      // 웹 환경 정리
+      if (Platform.OS === "web" && webAudioRef.current) {
+        webAudioRef.current.pause();
+        webAudioRef.current.src = "";
+        webAudioRef.current = null;
+      }
+      // 모바일 환경 정리
+      if (Platform.OS !== "web" && sound) {
+        sound.unloadAsync().catch((error) => {
+          console.warn("Error unloading sound:", error);
+        });
       }
       // 언마운트 시 dismissProgress를 1로 유지 (뒤 페이지 정상 크기)
       dismissProgress.setValue(1);
     };
+  }, [sound]);
+
+  // 웹 환경에서 HTML5 Audio 이벤트 리스너 설정
+  useEffect(() => {
+    if (Platform.OS === "web" && webAudioRef.current) {
+      const audio = webAudioRef.current;
+
+      const updateState = () => {
+        setWebAudioState({
+          isPlaying: !audio.paused,
+          position: audio.currentTime * 1000, // 밀리초로 변환
+          duration: audio.duration * 1000 || 0,
+        });
+      };
+
+      const handleTimeUpdate = () => {
+        updateState();
+      };
+
+      const handleLoadedMetadata = () => {
+        updateState();
+      };
+
+      const handleEnded = () => {
+        setWebAudioState((prev) => ({
+          ...prev,
+          isPlaying: false,
+          position: 0,
+        }));
+      };
+
+      audio.addEventListener("timeupdate", handleTimeUpdate);
+      audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.addEventListener("ended", handleEnded);
+
+      return () => {
+        audio.removeEventListener("timeupdate", handleTimeUpdate);
+        audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        audio.removeEventListener("ended", handleEnded);
+      };
+    }
+  }, [webAudioRef.current]);
+
+  // 모바일에서 오디오 상태를 주기적으로 폴링
+  useEffect(() => {
+    if (Platform.OS !== "web" && sound) {
+      // 기존 인터벌 정리
+      if (statusIntervalRef.current) {
+        clearInterval(statusIntervalRef.current);
+      }
+
+      // 주기적으로 상태 업데이트 (500ms)
+      statusIntervalRef.current = setInterval(async () => {
+        try {
+          if (sound) {
+            const currentStatus = await sound.getStatusAsync();
+            if (currentStatus.isLoaded) {
+              setStatus(currentStatus);
+            }
+          }
+        } catch (error) {
+          console.warn("Error getting audio status:", error);
+          // 에러 발생 시 인터벌 정리
+          if (statusIntervalRef.current) {
+            clearInterval(statusIntervalRef.current);
+            statusIntervalRef.current = null;
+          }
+        }
+      }, 500);
+
+      return () => {
+        if (statusIntervalRef.current) {
+          clearInterval(statusIntervalRef.current);
+          statusIntervalRef.current = null;
+        }
+      };
+    }
   }, [sound]);
 
   useEffect(() => {
@@ -159,15 +270,117 @@ export default function ArtworkAudioScreen() {
     if (!artwork) return;
 
     try {
+      // 웹 환경에서는 HTML5 Audio API 사용
+      if (Platform.OS === "web") {
+        if (!webAudioRef.current) {
+          setIsLoading(true);
+
+          // audioUrl을 실제 URL로 변환
+          let audioUrl: string;
+          if (typeof artwork.audioUrl === "string") {
+            audioUrl = artwork.audioUrl;
+          } else {
+            // require()로 로드한 로컬 파일의 경우, 웹에서는 asset URL이 필요
+            // Expo의 asset 시스템을 통해 URL 가져오기
+            const asset = artwork.audioUrl as any;
+            if (typeof asset === "string") {
+              // 이미 문자열인 경우
+              audioUrl = asset;
+            } else if (asset?.uri) {
+              audioUrl = asset.uri;
+            } else if (asset?.default) {
+              audioUrl = typeof asset.default === "string" ? asset.default : asset.default.uri || asset.default;
+            } else if (asset?.__packager_asset) {
+              // Metro bundler의 asset 정보 사용
+              // 웹에서는 일반적으로 번들된 파일의 상대 경로를 사용
+              const assetPath = asset.__packager_asset?.httpServerLocation || asset.__packager_asset?.uri;
+              if (assetPath) {
+                audioUrl = assetPath;
+              } else {
+                // 폴백: asset 객체 자체를 문자열로 변환 시도
+                audioUrl = String(asset);
+              }
+            } else {
+              // 최후의 수단: asset을 문자열로 변환
+              audioUrl = String(asset);
+            }
+          }
+
+          // 웹 환경에서 HTML5 Audio 사용
+          const AudioConstructor = typeof window !== "undefined" ? window.Audio : (global as any).Audio;
+          const audio = new AudioConstructor(audioUrl) as HTMLAudioElement;
+          audio.volume = volume;
+          audio.preload = "auto";
+
+          audio.addEventListener("canplay", () => {
+            setIsLoading(false);
+            setWebAudioState({
+              isPlaying: !audio.paused,
+              position: audio.currentTime * 1000,
+              duration: audio.duration * 1000 || 0,
+            });
+          });
+
+          audio.addEventListener("error", (e: Event) => {
+            console.error("Audio loading error:", e);
+            setIsLoading(false);
+          });
+
+          webAudioRef.current = audio;
+          await audio.play();
+          return;
+        }
+
+        // 이미 로드된 경우 재생/일시정지 토글
+        const audio = webAudioRef.current;
+        if (audio.paused) {
+          await audio.play();
+        } else {
+          audio.pause();
+        }
+        setWebAudioState({
+          isPlaying: !audio.paused,
+          position: audio.currentTime * 1000,
+          duration: audio.duration * 1000 || 0,
+        });
+        return;
+      }
+
+      // 모바일 환경에서는 expo-av 사용
       if (!sound) {
         setIsLoading(true);
-        const { sound: newSound } = await Audio.Sound.createAsync({ uri: artwork.audioUrl }, { shouldPlay: true, volume });
 
-        newSound.setOnPlaybackStatusUpdate((nextStatus) => {
-          if (nextStatus.isLoaded) {
-            setStatus(nextStatus);
-          }
+        // audioUrl이 require()로 로드한 로컬 파일인지 확인
+        let audioSource;
+        if (typeof artwork.audioUrl === "string") {
+          // URL 문자열인 경우
+          audioSource = { uri: artwork.audioUrl };
+        } else {
+          // require()로 로드한 로컬 파일인 경우
+          audioSource = artwork.audioUrl;
+        }
+
+        const { sound: newSound } = await Audio.Sound.createAsync(audioSource, {
+          shouldPlay: true,
+          volume,
         });
+
+        // 초기 상태 가져오기
+        const initialStatus = await newSound.getStatusAsync();
+        if (initialStatus.isLoaded) {
+          setStatus(initialStatus);
+        }
+
+        // 네이티브에서는 정상적으로 상태 업데이트 콜백 설정
+        try {
+          newSound.setOnPlaybackStatusUpdate((nextStatus) => {
+            if (nextStatus.isLoaded) {
+              setStatus(nextStatus);
+            }
+          });
+        } catch (error) {
+          console.warn("Failed to set playback status update:", error);
+        }
 
         setSound(newSound);
         setIsLoading(false);
@@ -179,25 +392,67 @@ export default function ArtworkAudioScreen() {
         return;
       }
 
+      // 상태 업데이트
+      setStatus(currentStatus);
+
       if (currentStatus.isPlaying) {
         await sound.pauseAsync();
+        // pauseAsync 후 상태 다시 가져오기
+        const pausedStatus = await sound.getStatusAsync();
+        if (pausedStatus.isLoaded) {
+          setStatus(pausedStatus);
+        }
       } else {
         await sound.playAsync();
+        // playAsync 후 상태 다시 가져오기
+        const playingStatus = await sound.getStatusAsync();
+        if (playingStatus.isLoaded) {
+          setStatus(playingStatus);
+        }
       }
     } catch (error) {
-      console.warn("Audio playback error", error);
+      console.error("Audio playback error:", error);
       setIsLoading(false);
+      // 에러 발생 시 상태 초기화
+      if (Platform.OS === "web") {
+        if (webAudioRef.current) {
+          webAudioRef.current.pause();
+          webAudioRef.current.src = "";
+          webAudioRef.current = null;
+        }
+        setWebAudioState({
+          isPlaying: false,
+          position: 0,
+          duration: 0,
+        });
+      } else {
+        if (sound) {
+          try {
+            await sound.unloadAsync();
+          } catch (unloadError) {
+            console.warn("Error unloading sound:", unloadError);
+          }
+          setSound(null);
+          setStatus(null);
+        }
+      }
     }
   };
 
   // 볼륨 조절 핸들러
   const handleVolumeChange = async (newVolume: number) => {
     setVolume(newVolume);
-    if (sound) {
-      try {
-        await sound.setVolumeAsync(newVolume);
-      } catch (error) {
-        console.warn("Volume change error", error);
+    if (Platform.OS === "web") {
+      if (webAudioRef.current) {
+        webAudioRef.current.volume = newVolume;
+      }
+    } else {
+      if (sound) {
+        try {
+          await sound.setVolumeAsync(newVolume);
+        } catch (error) {
+          console.warn("Volume change error", error);
+        }
       }
     }
   };
@@ -299,13 +554,11 @@ export default function ArtworkAudioScreen() {
 
             {/* 작품 정보 */}
             <View style={styles.trackInfo}>
-              <Text style={styles.trackTitle} numberOfLines={2}>
-                {artwork.title}
-              </Text>
-              <Text style={styles.trackArtist} numberOfLines={1}>
+              <AutoScrollText text={artwork.title} style={styles.trackTitle} containerStyle={styles.trackTitleContainer} />
+              <Text style={styles.trackArtist} numberOfLines={1} ellipsizeMode="tail">
                 {artwork.artist}
               </Text>
-              <Text style={styles.trackAlbum} numberOfLines={1}>
+              <Text style={styles.trackAlbum} numberOfLines={1} ellipsizeMode="tail">
                 {exhibition.title}
               </Text>
             </View>
@@ -360,6 +613,143 @@ function formatMillis(value: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+// 자동 스크롤 텍스트 컴포넌트 (마키 효과)
+interface AutoScrollTextProps {
+  text: string;
+  style: TextStyle;
+  containerStyle?: ViewStyle;
+  delay?: number;
+  speed?: number;
+}
+
+function AutoScrollText({ text, style, containerStyle, delay = 2000, speed = 50 }: AutoScrollTextProps) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const containerWidth = useRef(0);
+  const textWidth = useRef(0);
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const stopAllAnimations = () => {
+    if (animationRef.current) {
+      animationRef.current.stop();
+      animationRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const startAnimation = () => {
+    if (containerWidth.current === 0 || textWidth.current === 0) return;
+
+    // 텍스트가 컨테이너보다 짧으면 중앙 정렬 (스크롤 불필요)
+    if (textWidth.current <= containerWidth.current) {
+      translateX.setValue(0);
+      return;
+    }
+
+    stopAllAnimations();
+
+    // 스크롤 거리 계산
+    const scrollDistance = textWidth.current - containerWidth.current + 20; // 여유 공간 추가
+
+    // 초기 위치: 0 (중앙 정렬 상태)
+    translateX.setValue(0);
+
+    timeoutRef.current = setTimeout(() => {
+      animationRef.current = Animated.loop(
+        Animated.sequence([
+          // 왼쪽으로 스크롤 (전체 텍스트 보이기)
+          Animated.timing(translateX, {
+            toValue: -scrollDistance,
+            duration: (scrollDistance / speed) * 1000,
+            useNativeDriver: true,
+          }),
+          Animated.delay(1000),
+          // 중앙으로 복귀
+          Animated.timing(translateX, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.delay(2000),
+        ])
+      );
+      animationRef.current.start();
+    }, delay);
+  };
+
+  const handleContainerLayout = (event: { nativeEvent: { layout: { width: number } } }) => {
+    const width = event.nativeEvent.layout.width;
+    // 패딩 고려 (좌우 각 10px)
+    const padding = 20;
+    const actualWidth = width - padding;
+    if (actualWidth > 0 && containerWidth.current !== actualWidth) {
+      containerWidth.current = actualWidth;
+      setTimeout(() => startAnimation(), 200);
+    }
+  };
+
+  const handleTextLayout = (event: { nativeEvent: { layout: { width: number } } }) => {
+    const width = event.nativeEvent.layout.width;
+    if (width > 0 && textWidth.current !== width) {
+      textWidth.current = width;
+      setTimeout(() => startAnimation(), 200);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopAllAnimations();
+    };
+  }, []);
+
+  useEffect(() => {
+    stopAllAnimations();
+    translateX.setValue(0);
+    containerWidth.current = 0;
+    textWidth.current = 0;
+
+    const timer = setTimeout(() => {
+      // 레이아웃 재측정 후 애니메이션 시작
+      startAnimation();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [text]);
+
+  // 스타일에서 textAlign 제거 (컨테이너에서 중앙 정렬 처리)
+  const textStyle = { ...style };
+  delete (textStyle as any).textAlign;
+
+  return (
+    <View
+      style={[
+        {
+          overflow: "hidden",
+          paddingHorizontal: 10, // 컨테이너에 패딩 추가로 텍스트가 잘리지 않도록
+        },
+        containerStyle,
+      ]}
+      onLayout={handleContainerLayout}
+    >
+      <Animated.View
+        style={{
+          flexDirection: "row" as const,
+          alignItems: "center" as const,
+          justifyContent: "center" as const,
+          transform: [{ translateX }],
+        }}
+      >
+        <Text style={textStyle} onLayout={handleTextLayout} numberOfLines={1}>
+          {text}
+        </Text>
+      </Animated.View>
+    </View>
+  );
 }
 
 // 볼륨 슬라이더 컴포넌트
@@ -532,12 +922,16 @@ const createStyles = (scale: (size: number) => number, moderateScale: (size: num
       alignItems: "center" as const,
       marginBottom: scale(32),
     },
+    trackTitleContainer: {
+      width: "100%",
+      marginBottom: scale(8),
+      alignItems: "center" as const,
+    },
     trackTitle: {
       fontSize: moderateScale(24),
       fontWeight: "600" as const,
       color: colors.text.primary,
       textAlign: "center" as const,
-      marginBottom: scale(8),
       letterSpacing: -0.5,
     },
     trackArtist: {
